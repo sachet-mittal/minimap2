@@ -8,7 +8,7 @@ LIBS=		-lm -lz -lpthread
 
 ifeq ($(arm_neon),) # if arm_neon is not defined
 ifeq ($(sse2only),) # if sse2only is not defined
-	OBJS+=ksw2_extz2_sse41.o ksw2_extd2_sse41.o ksw2_exts2_sse41.o ksw2_extz2_sse2.o ksw2_extd2_sse2.o ksw2_exts2_sse2.o ksw2_dispatch.o
+	OBJS+=ksw2_extz2_sse41.o ksw2_extd2_sse41.o ksw2_exts2_sse41.o ksw2_extz2_sse2.o ksw2_extd2_sse2.o ksw2_exts2_sse2.o ksw2_dispatch.o # csc_lib.o csc_lib.o cst_lib.o
 else                # if sse2only is defined
 	OBJS+=ksw2_extz2_sse.o ksw2_extd2_sse.o ksw2_exts2_sse.o
 endif
@@ -21,6 +21,8 @@ else				#if aarch64 is defined
 	CFLAGS+=-D_FILE_OFFSET_BITS=64 -fsigned-char
 endif
 endif
+
+# OBJS+=csc_lib.c csn.c csn.h csn_lib.c cst_lib.c
 
 .PHONY:all extra clean depend
 .SUFFIXES:.c .o
@@ -51,13 +53,13 @@ ksw2_ll_sse.o:ksw2_ll_sse.c ksw2.h kalloc.h
 		$(CC) -c $(CFLAGS) -msse2 $(CPPFLAGS) $(INCLUDES) $< -o $@
 endif
 
-ksw2_extz2_sse41.o:ksw2_extz2_sse.c ksw2.h kalloc.h
+ksw2_extz2_sse41.o:ksw2_extz2_sse.c ksw2.h kalloc.h csc_lib.c csn.c csn.h csn_lib.c cst_lib.c
 		$(CC) -c $(CFLAGS) -msse4.1 $(CPPFLAGS) -DKSW_CPU_DISPATCH $(INCLUDES) $< -o $@
 
-ksw2_extz2_sse2.o:ksw2_extz2_sse.c ksw2.h kalloc.h
+ksw2_extz2_sse2.o:ksw2_extz2_sse.c ksw2.h kalloc.h csc_lib.c csn.c csn.h csn_lib.c cst_lib.c
 		$(CC) -c $(CFLAGS) -msse2 -mno-sse4.1 $(CPPFLAGS) -DKSW_CPU_DISPATCH -DKSW_SSE2_ONLY $(INCLUDES) $< -o $@
 
-ksw2_extd2_sse41.o:ksw2_extd2_sse.c ksw2.h kalloc.h
+ksw2_extd2_sse41.o:ksw2_extd2_sse.c ksw2.h kalloc.h csc_lib.c csn.c csn.h csn_lib.c cst_lib.c
 		$(CC) -c $(CFLAGS) -msse4.1 $(CPPFLAGS) -DKSW_CPU_DISPATCH $(INCLUDES) $< -o $@
 
 ksw2_extd2_sse2.o:ksw2_extd2_sse.c ksw2.h kalloc.h

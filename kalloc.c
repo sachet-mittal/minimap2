@@ -80,7 +80,7 @@ void kfree(void *_km, void *ap) /* kfree() also adds a new core to the circular 
 {
 	header_t *p, *q;
 	kmem_t *km = (kmem_t*)_km;
-	
+
 	if (!ap) return;
 	if (km == NULL) {
 		free(ap);
