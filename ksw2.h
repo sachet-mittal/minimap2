@@ -1,7 +1,9 @@
 #ifndef KSW2_H_
 #define KSW2_H_
 
+extern int COUNTER;
 #include <stdint.h>
+#include <stdio.h>
 
 #define KSW_NEG_INF -0x40000000
 
@@ -19,7 +21,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 typedef struct {
 	uint32_t max:31, zdropped:1;
 	int max_q, max_t;      // max extension coordinate
@@ -28,7 +29,8 @@ typedef struct {
 	int score;             // max score reaching both ends; may be KSW_NEG_INF
 	int m_cigar, n_cigar;
 	int reach_end;
-	uint32_t *cigar;
+	uint32_t cigar[2048];
+	//uint32_t *cigar;
 } ksw_extz_t;
 
 /**
@@ -100,15 +102,25 @@ int ksw_ll_i16(void *q, int tlen, const uint8_t *target, int gapo, int gape, int
 #define kfree(km, ptr) free((ptr))
 #endif
 
+//static inline void ksw_push_cigar(void *km, int *n_cigar, int *m_cigar, uint32_t *cigar, uint32_t op, int len)
 static inline uint32_t *ksw_push_cigar(void *km, int *n_cigar, int *m_cigar, uint32_t *cigar, uint32_t op, int len)
 {
+
+    FILE *fp1 = fopen("tracking_cigar.txt", "a+");
 	if (*n_cigar == 0 || op != (cigar[(*n_cigar) - 1]&0xf)) {
 		if (*n_cigar == *m_cigar) {
 			*m_cigar = *m_cigar? (*m_cigar)<<1 : 4;
-			cigar = (uint32_t*)krealloc(km, cigar, (*m_cigar) << 2);
+			//cigar = (uint32_t*)krealloc(km, cigar, (*m_cigar) << 2);
 		}
+        fprintf(fp1, "Sachet 4 modifying n_cigar=%d ", *n_cigar);
 		cigar[(*n_cigar)++] = len<<4 | op;
-	} else cigar[(*n_cigar)-1] += len<<4;
+        fprintf(fp1,"to %d \n", cigar[(*n_cigar)]);
+	} else {
+        fprintf(fp1,"Sachet 5 modifying n_cigar=%d", (*n_cigar)-1);
+        cigar[(*n_cigar)-1] += len<<4;
+        fprintf(fp1,"to %d \n", cigar[(*n_cigar)-1]);
+    }
+    fclose(fp1);
 	return cigar;
 }
 
@@ -119,16 +131,22 @@ static inline uint32_t *ksw_push_cigar(void *km, int *n_cigar, int *m_cigar, uin
 static inline void ksw_backtrack(void *km, int is_rot, int is_rev, int min_intron_len, const uint8_t *p, const int *off, const int *off_end, int n_col, int i0, int j0,
 								 int *m_cigar_, int *n_cigar_, uint32_t **cigar_)
 { // p[] - lower 3 bits: which type gets the max; bit
+    
+    FILE *fp1 = fopen("tracking_cigar.txt", "a+");
+    fprintf(fp1,"Sachet: is_rot=%d is_rev=%d min_intron_len=%d n_col=%d, i0=%d j0=%d\n", 
+            is_rot, is_rev, min_intron_len, n_col, i0, j0);
 	int n_cigar = 0, m_cigar = *m_cigar_, i = i0, j = j0, r, state = 0;
 	uint32_t *cigar = *cigar_, tmp;
 	while (i >= 0 && j >= 0) { // at the beginning of the loop, _state_ tells us which state to check
 		int force_state = -1;
 		if (is_rot) {
 			r = i + j;
+            fprintf(fp1,"Sachet 1 \n");
 			if (i < off[r]) force_state = 2;
 			if (off_end && i > off_end[r]) force_state = 1;
 			tmp = force_state < 0? p[(size_t)r * n_col + i - off[r]] : 0;
 		} else {
+            fprintf(fp1,"Sachet 2 \n");
 			if (j < off[i]) force_state = 2;
 			if (off_end && j > off_end[i]) force_state = 1;
 			tmp = force_state < 0? p[(size_t)i * n_col + j - off[i]] : 0;
@@ -136,7 +154,9 @@ static inline void ksw_backtrack(void *km, int is_rot, int is_rev, int min_intro
 		if (state == 0) state = tmp & 7; // if requesting the H state, find state one maximizes it.
 		else if (!(tmp >> (state + 2) & 1)) state = 0; // if requesting other states, _state_ stays the same if it is a continuation; otherwise, set to H
 		if (state == 0) state = tmp & 7; // TODO: probably this line can be merged into the "else if" line right above; not 100% sure
+
 		if (force_state >= 0) state = force_state;
+        fprintf(fp1,"Sachet 3 state=%d\n", state);
 		if (state == 0) cigar = ksw_push_cigar(km, &n_cigar, &m_cigar, cigar, 0, 1), --i, --j; // match
 		else if (state == 1 || (state == 3 && min_intron_len <= 0)) cigar = ksw_push_cigar(km, &n_cigar, &m_cigar, cigar, 2, 1), --i; // deletion
 		else if (state == 3 && min_intron_len > 0) cigar = ksw_push_cigar(km, &n_cigar, &m_cigar, cigar, 3, 1), --i; // intron
@@ -148,6 +168,7 @@ static inline void ksw_backtrack(void *km, int is_rot, int is_rev, int min_intro
 		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
 			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
 	*m_cigar_ = m_cigar, *n_cigar_ = n_cigar, *cigar_ = cigar;
+    fclose(fp1);
 }
 
 static inline void ksw_reset_extz(ksw_extz_t *ez)

@@ -1,6 +1,9 @@
 #ifdef KSW_CPU_DISPATCH
 #include <stdlib.h>
+#include <stdio.h>
 #include "ksw2.h"
+
+int COUNTER = 0;
 
 #define SIMD_SSE     0x1
 #define SIMD_SSE2    0x2
@@ -63,7 +66,6 @@ void ksw_extz2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 		ksw_extz2_sse2(km, qlen, query, tlen, target, m, mat, q, e, w, zdrop, end_bonus, flag, ez);
 	else abort();
 }
-
 void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uint8_t *target, int8_t m, const int8_t *mat,
 				   int8_t q, int8_t e, int8_t q2, int8_t e2, int w, int zdrop, int end_bonus, int flag, ksw_extz_t *ez)
 {
@@ -72,8 +74,10 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 	extern void ksw_extd2_sse41(void *km, int qlen, const uint8_t *query, int tlen, const uint8_t *target, int8_t m, const int8_t *mat,
 				   int8_t q, int8_t e, int8_t q2, int8_t e2, int w, int zdrop, int end_bonus, int flag, ksw_extz_t *ez);
 	if (ksw_simd < 0) ksw_simd = x86_simd();
-	if (ksw_simd & SIMD_SSE4_1)
+	if (ksw_simd & SIMD_SSE4_1){
+        printf("sachet calling ksw_extd2_sse41 for COUNTER=%d th time \n", COUNTER);
 		ksw_extd2_sse41(km, qlen, query, tlen, target, m, mat, q, e, q2, e2, w, zdrop, end_bonus, flag, ez);
+    }
 	else if (ksw_simd & SIMD_SSE2)
 		ksw_extd2_sse2(km, qlen, query, tlen, target, m, mat, q, e, q2, e2, w, zdrop, end_bonus, flag, ez);
 	else abort();

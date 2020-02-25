@@ -27,6 +27,7 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 				   int8_t q, int8_t e, int8_t q2, int8_t e2, int w, int zdrop, int end_bonus, int flag, ksw_extz_t *ez)
 #endif // ~KSW_CPU_DISPATCH
 {
+    long int sent=0, recieved=0;
 #define __dp_code_block1 \
 	z = _mm_load_si128(&s[t]); \
 	xt1 = _mm_load_si128(&x[t]);                     /* xt1 <- x[r-1][t..t+15] */ \
@@ -56,6 +57,34 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 	tmp = _mm_sub_epi8(z, q2_); \
 	a2= _mm_sub_epi8(a2, tmp); \
 	b2= _mm_sub_epi8(b2, tmp);
+    
+    FILE *fp;
+    COUNTER++;
+    fp = fopen("test.txt", "a+");
+    fprintf(fp, "===============================\n");
+    fprintf(fp, "COUNTER=%d\n", COUNTER);
+
+    fprintf(fp, "query \n");
+    for (int i = 0; i<qlen; i++)
+        fprintf(fp, "%d ", query[i]);
+    fprintf(fp, "\n");
+
+    fprintf(fp, "target \n");
+    for (int i = 0; i<tlen; i++)
+        fprintf(fp, "%d ", target[i]);
+    fprintf(fp, "\n");
+    fprintf(fp, "q=%d \n", q);
+    fprintf(fp, "e=%d \n", e);
+    fprintf(fp, "q2=%d \n", q2);
+    fprintf(fp, "e2=%d \n", e2);
+
+    fprintf(fp, "zdrop=%d \n", zdrop);
+    fprintf(fp, "end_bonus=%d \n", end_bonus);
+    fprintf(fp, "cigar_before= ");
+    for (int i = 0 ; i<2048; i++){
+        fprintf(fp, "%d ", ez->cigar[i]);
+    }
+    fprintf(fp, "\n");
 
 	int r, t, qe = q + e, n_col_, *off = 0, *off_end = 0, tlen_, qlen_, last_st, last_en, wl, wr, max_sc, min_sc, long_thres, long_diff;
 	int with_cigar = !(flag&KSW_EZ_SCORE_ONLY), approx_max = !!(flag&KSW_EZ_APPROX_MAX);
@@ -96,7 +125,8 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 		++long_thres;
 	long_diff = long_thres * (e - e2) - (q2 - q) - e2;
 
-	mem = (uint8_t*)kcalloc(km, tlen_ * 8 + qlen_ + 1, 16);
+	mem = (uint8_t*)calloc(tlen_ * 8 + qlen_ + 1, 16);
+	//mem = (uint8_t*)kcalloc(km, tlen_ * 8 + qlen_ + 1, 16);
 	u = (__m128i*)(((size_t)mem + 15) >> 4 << 4); // 16-byte aligned
 	v = u + tlen_, x = v + tlen_, y = x + tlen_, x2 = y + tlen_, y2 = x2 + tlen_;
 	s = y2 + tlen_, sf = (uint8_t*)(s + tlen_), qr = sf + tlen_ * 16;
@@ -107,16 +137,38 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 	memset(x2, -q2 - e2, tlen_ * 16);
 	memset(y2, -q2 - e2, tlen_ * 16);
 	if (!approx_max) {
-		H = (int32_t*)kmalloc(km, tlen_ * 16 * 4);
+		H = (int32_t*)malloc(tlen_ * 16 * 4);
+		//H = (int32_t*)kmalloc(km, tlen_ * 16 * 4);
 		for (t = 0; t < tlen_ * 16; ++t) H[t] = KSW_NEG_INF;
 	}
 	if (with_cigar) {
-		mem2 = (uint8_t*)kmalloc(km, ((size_t)(qlen + tlen - 1) * n_col_ + 1) * 16);
+		mem2 = (uint8_t*)calloc(((size_t)(qlen + tlen - 1) * n_col_ + 1) * 16, 1);
+		//mem2 = (uint8_t*)malloc(((size_t)(qlen + tlen - 1) * n_col_ + 1) * 16);
 		p = (__m128i*)(((size_t)mem2 + 15) >> 4 << 4);
-		off = (int*)kmalloc(km, (qlen + tlen - 1) * sizeof(int) * 2);
+		off = (int*)calloc((qlen + tlen - 1) * sizeof(int) * 2, 1) ;
+		//off = (int*)malloc((qlen + tlen - 1) * sizeof(int) * 2);
 		off_end = off + qlen + tlen - 1;
 	}
 
+    FILE *fp3 = fopen("mem2_off.txt", "a+");
+
+    fprintf(fp3, "mem2: \n");
+    for (int i=0; i < ((size_t)(qlen + tlen - 1) * n_col_ + 1) * 16; i++){
+        fprintf(fp3, "%02x ", mem2[i]);
+    }
+    fprintf(fp3, "\n");
+
+    fprintf(fp3, "off: \n");
+    for (int i=0; i<qlen + tlen -1; i++)
+        fprintf(fp3, "%d ", off[i]);
+    fprintf(fp3, "\n");
+
+    fprintf(fp3, "off_end: \n");
+    for (int i=0; i<qlen + tlen -1; i++)
+        fprintf(fp3, "%d ", off_end[i]);
+    fprintf(fp3, "\n");
+
+    fclose(fp3);
 	for (t = 0; t < qlen; ++t) qr[t] = query[qlen - 1 - t];
 	memcpy(sf, target, tlen);
 
@@ -376,19 +428,71 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 		last_st = st, last_en = en;
 		//for (t = st0; t <= en0; ++t) printf("(%d,%d)\t(%d,%d,%d,%d)\t%d\n", r, t, ((int8_t*)u)[t], ((int8_t*)v)[t], ((int8_t*)x)[t], ((int8_t*)y)[t], H[t]); // for debugging
 	}
-	kfree(km, mem);
-	if (!approx_max) kfree(km, H);
+	free(mem);
+	if (!approx_max) free(H);
+    uint32_t *cigar_ptr;
+    cigar_ptr = ez->cigar;
+    int rev_cigar = !!(flag & KSW_EZ_REV_CIGAR);
+    /*
+    printf("Sachet: rev_cigar: %d \n", rev_cigar);
+    printf("Sachet: off[0]: %d \n", off[0]);
+    printf("Sachet: off_end[0]: %d \n", off_end[0]);
+    printf("Sachet: n_col_*16: %d \n", n_col_*16);
+    printf("Sachet: ez->max_t: %d \n", ez->max_t);
+    printf("Sachet: ez->max_q: %d \n", ez->max_q);
+    printf("Sachet: ez->m_cigar: %d \n", ez->m_cigar);
+    printf("Sachet: ez->n_cigar: %d \n", ez->n_cigar);
+    printf("Sachet: cigar_ptr: %d \n", cigar_ptr);
+    */
+    if (COUNTER==6){
+        //abort();
+    }
 	if (with_cigar) { // backtrack
-		int rev_cigar = !!(flag & KSW_EZ_REV_CIGAR);
 		if (!ez->zdropped && !(flag&KSW_EZ_EXTZ_ONLY)) {
-			ksw_backtrack(km, 1, rev_cigar, 0, (uint8_t*)p, off, off_end, n_col_*16, tlen-1, qlen-1, &ez->m_cigar, &ez->n_cigar, &ez->cigar);
+			ksw_backtrack(km, 1, rev_cigar, 0, (uint8_t*)p, off, off_end, n_col_*16, tlen-1, qlen-1, &ez->m_cigar, &ez->n_cigar, &cigar_ptr);
 		} else if (!ez->zdropped && (flag&KSW_EZ_EXTZ_ONLY) && ez->mqe + end_bonus > (int)ez->max) {
 			ez->reach_end = 1;
-			ksw_backtrack(km, 1, rev_cigar, 0, (uint8_t*)p, off, off_end, n_col_*16, ez->mqe_t, qlen-1, &ez->m_cigar, &ez->n_cigar, &ez->cigar);
+			ksw_backtrack(km, 1, rev_cigar, 0, (uint8_t*)p, off, off_end, n_col_*16, ez->mqe_t, qlen-1, &ez->m_cigar, &ez->n_cigar, &cigar_ptr);
 		} else if (ez->max_t >= 0 && ez->max_q >= 0) {
-			ksw_backtrack(km, 1, rev_cigar, 0, (uint8_t*)p, off, off_end, n_col_*16, ez->max_t, ez->max_q, &ez->m_cigar, &ez->n_cigar, &ez->cigar);
+			ksw_backtrack(km, 1, rev_cigar, 0, (uint8_t*)p, off, off_end, n_col_*16, ez->max_t, ez->max_q, &ez->m_cigar, &ez->n_cigar, &cigar_ptr);
 		}
-		kfree(km, mem2); kfree(km, off);
+		free(mem2); free(off);
 	}
+
+    fprintf(fp, "ez->m_cigar = %d \n", ez->m_cigar);
+    fprintf(fp, "ez->n_cigar = %d \n", ez->n_cigar);
+    for (int i = 0 ; i<ez->m_cigar; i++){
+        fprintf(fp, "%d ", ez->cigar[i]);
+    }
+    fprintf(fp, "\n");
+    fclose(fp);
+
+    sent += qlen * sizeof(uint8_t);
+    sent += tlen * sizeof(uint8_t);
+    sent += m * sizeof(uint8_t);
+    sent += sizeof(ez);
+
+    sent += sizeof(qlen);
+    sent += sizeof(tlen);
+    sent += sizeof(m);
+    sent += sizeof(q);
+    sent += sizeof(e);
+    sent += sizeof(q2);
+    sent += sizeof(e2);
+    sent += sizeof(w);
+    sent += sizeof(end_bonus);
+    sent += sizeof(zdrop);
+    sent += sizeof(flag);
+
+    recieved += sizeof(*ez);
+
+    if (COUNTER==330){
+        //abort();
+    }
+
+    //printf("Sachet Sent=%ld\n", sent);
+
+    //printf("Sachet Received=%ld\n", recieved);
+    
 }
 #endif // __SSE2__
